@@ -1,31 +1,55 @@
 #  iOS  POP （v1.0）引擎 源码解析
 
-
-## 1、类分类
-POP 引擎大致框架如下图所示：
+## 1、框架结构
+POP 引擎框架大致如下图所示：
 ![](images/struct.png)
-主要分为了以下四个部分。
+
+动画基本用法：可参考[仓库](https://github.com/schneiderandre/popping)。
+
+#### 1.1.1 阻尼动画
+
+	POPDecayAnimation *positionAnimation = [POPDecayAnimation animationWithPropertyNamed:kPOPLayerPosition];   
+    positionAnimation.delegate = self; 
+    positionAnimation.velocity = [NSValue valueWithCGPoint:velocity];
+    [view.layer pop_addAnimation:positionAnimation forKey:@"layerPositionAnimation"];
+    
+#### 1.1.2 弹跳动画
+	POPSpringAnimation *strokeAnimation = [POPSpringAnimation animationWithPropertyNamed:kPOPShapeLayerStrokeEnd];
+    strokeAnimation.toValue = @(strokeEnd);
+    strokeAnimation.springBounciness = 30.0f;
+    strokeAnimation.removedOnCompletion = NO;
+    [self.circleLayer pop_addAnimation:strokeAnimation forKey:@"layerStrokeAnimation"];  
+
+POPBasicAnimation、POPCustomAnimation、POPDecayAnimation、POPPropertAnimation、POPSpringAnimation
+
+渲染流程：
+
+1、View or view.layer 添加 POPPropertyAnimation；    
+2、引擎 POPAnimator 启动，Displalink 开动；   
+3、工具层进行插值、矩阵旋转等计算逐桢渲染，并将运算结果反馈给引擎；   
+4、引擎逐枕将计算结果写入动画的对象；   
+5、动画结束，将引擎的 Displaylink 暂停，等待下一个动画的来进行开启   
+
+**。。。。待更新**
 
 ### 1.1 动画类
 
-重要画类大致的继承关系如下图所示
+动画类大致的继承关系如下图所示
 ![](images/animation_uml.png)
-
 
 #### 1.1.1 POPAnimation
 **功能：** 该类为 POP 库中所有动画类中的顶级父类，所有动画类都直接或间接的继承于它，一切动画的基础，POPAnimation 有以下重要属性：
 
 |属性|说明|
 |---|---|
-|NSString *name; | name 属性是一个可选的并帮助标识该动画的属性|
-|CFTimeInterval beginTime; | 动画开始时间  默认立即开始 0 |
-|POPAnimationTracer *tracer;   |返回现有示踪器，如果需要，创建一个示踪器。 在示踪器上调用开始/停止来切换事件收集。  ---暂时不明白是什么意思|
-|void (^completionBlock)(POPAnimation *anim, BOOL finished);    |动画完成回调  |
-|BOOL removedOnCompletion;  |设置动画的 removedOnCompletion 属性值为 NO 可使得动画方便恢复，默认设置为 YES 。即动画完成之后移除掉。|
-|BOOL paused|是否被暂停|
-|BOOL autoreverses| 是否可逆转|
-|NSInteger repeatCount|重复次数|
-
+| NSString *name; | name 属性是一个可选的并帮助标识该动画的属性|
+| CFTimeInterval beginTime; | 动画开始时间  默认立即开始 0 |
+| POPAnimationTracer *tracer;   |返回现有示踪器，如果需要，创建一个示踪器。 在示踪器上调用开始/停止来切换事件收集。  ---暂时不明白是什么意思|
+| void (^completionBlock)(POPAnimation *anim, BOOL finished);    | 动画完成回调  |
+| BOOL removedOnCompletion;  | 设置动画的 removedOnCompletion 属性值为 NO 可使得动画方便恢复，默认设置为 YES 。即动画完成之后移除掉。 |
+| BOOL paused | 是否被暂停 |
+| BOOL autoreverses | 是否可逆转 |
+| NSInteger repeatCount | 重复次数 |
 
 **协议（接口）**
 
@@ -50,15 +74,12 @@ POP 引擎大致框架如下图所示：
 |CGFloat roundingFactor|指定1.0以在积分值之间动画化。 默认为0表示不舍入。**--- 暂未明确其含义，待更新**|
 | NSUInteger clampMode |钳位模式应用于当前动画值。默认为 kPOPAnimationClampNone **--- 暂未明确其含义，待更新**|
 | BOOL additive |指示每个帧是否应该“添加”值，而不是设置的标志。**--- 暂未明确其含义，待更新**|
-
+ 
 
 #### 1.1.2 POPCustomAnimation  : POPAnimation 
 
 较 POPAnimation 增加了如下方法和属性   
-**自定义类型**   
-typedef BOOL (^POPCustomAnimationBlock)(id target, POPCustomAnimation *animation);
-
-
+**自定义类型**   typedef BOOL (^POPCustomAnimationBlock)(id target, POPCustomAnimation *animation);
 
 |属性|说明|
 |---|---|
@@ -67,48 +88,48 @@ typedef BOOL (^POPCustomAnimationBlock)(id target, POPCustomAnimation *animation
 | CFTimeInterval elapsedTime | 回调的当前动画过去时长 |
 
 
+#### 1.1.3 POPDecayAnimation : POPPropertyAnimation
+
+**功能：**匀减速动画类。
+
+|属性|说明|
+|---|---|
+|+ (instancetype)animation| 创建默认实例 |
+| + (instancetype)animationWithPropertyNamed:(NSString *)name | 通过要改变的属性名 name  构建动画对象 |
+| id velocity | 设置动画开始时的初始速度 |
+| id originalVelocity | 设置动画开始时的初始速度，由于速度属性随着动画的进行而被修改，所以该属性存储原始的，传入速度以支持自动反转和 repeatCount 。 |
+| CGFloat deceleration | 减速度 |
+| CFTimeInterval duration | 动画间隔 |
+| - (void)setToValue:(id)toValue |设置属性动画的终点值 |
+| reversedVelocity | 当动画设置时，基于originalVelocity的反向速度。 |
 
 
-动画基本用法：
+#### 1.1.4 POPSpringAnimation : POPPropertyAnimation
 
-#### 1.1.1 阻尼动画
+**功能：** POP 弹跳动画专用类。
 
-	POPDecayAnimation *positionAnimation = [POPDecayAnimation animationWithPropertyNamed:kPOPLayerPosition];   
-    positionAnimation.delegate = self; 
-    positionAnimation.velocity = [NSValue valueWithCGPoint:velocity];
-    [view.layer pop_addAnimation:positionAnimation forKey:@"layerPositionAnimation"];
-    
-#### 1.1.2 弹跳动画
-	POPSpringAnimation *strokeAnimation = [POPSpringAnimation animationWithPropertyNamed:kPOPShapeLayerStrokeEnd];
-    strokeAnimation.toValue = @(strokeEnd);
-    strokeAnimation.springBounciness = 30.0f;
-    strokeAnimation.removedOnCompletion = NO;
-    [self.circleLayer pop_addAnimation:strokeAnimation forKey:@"layerStrokeAnimation"];  
-
-POPBasicAnimation、POPCustomAnimation、POPDecayAnimation、POPPropertAnimation、POPSpringAnimation
-
-### 1.2 算法及其变换类
-POPMath、POPVector、TransformationMatrix、POPSpringSolver
-
-WebCore 里包含了一些从 Apple 的开源的网页渲染引擎里拿出的源文件，与 Utility 里的组件一并，提供了 POP 的各项复杂计算的基本支持。
+|属性|说明|
+|---|---|
+|+ (instancetype)animation| 创建默认实例 |
+| + (instancetype)animationWithPropertyNamed:(NSString *)name | 通过要改变的属性名 name  构建动画对象 |
+| CGFloat springBounciness | 弹跳反弹力 |
+| CGFloat springSpeed | 弹跳速度 |
+| CGFloat dynamicsTension | 动态张力，可以使用超过波峰和速度的细微调整动画效果。 |
+| CGFloat dynamicsFriction | 动态摩擦力，可以使用超过波峰和速度的细微调整动画效果。 |
+| CGFloat dynamicsMass | 在动力学模拟中使用的质量 , 可以使用超过波峰和速度的细微调整动画效果。 |
 
 
-### 1.3 工具类
-POPGeometry 、POPCGUtils、、
+#### 1.1.5 POPBasicAnimation : POPPropertyAnimation
 
+|属性|说明|
+|---|---|
+|+ (instancetype)animation| 创建默认实例 |
+| + (instancetype)animationWithPropertyNamed:(NSString *)name | 通过要改变的属性名 name  构建动画对象 |
+| + (instancetype)defaultAnimation | 返回一个基于 kCAMediaTimingFunctionDefault 的定时基础动画实例|
+| + (instancetype)linearAnimation | 返回一个线性匀速基础动画实例|
+| + (instancetype)easeInAnimation | 返回一个缓入动画的实例 |
+| + (instancetype)easeOutAnimation | 返回一个缓出的实例 |
+| + (instancetype)easeInEaseOutAnimation | 返回一个渐入渐出的动画对象实例 |
+| CFTimeInterval duration | 返回动画过程间隔，默认为 0.4 秒 |
+| CAMediaTimingFunction *timingFunction | 速度控制属性  |
 
-### 1.4 工具类
-
-
-
-
-
-
-
-
-
-
-  
-    
-    
-###3、
